@@ -1,6 +1,6 @@
-package com.company.mutante.model;
+package com.company.mutants.model;
 
-import com.company.mutante.validator.ValidDNA;
+import com.company.mutants.validator.ValidDNA;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

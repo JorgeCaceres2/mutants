@@ -1,9 +1,11 @@
-package com.company.mutante.service;
+package com.company.mutants.service;
 
-import com.company.mutante.entity.DNAEntity;
-import com.company.mutante.model.DNARequest;
-import com.company.mutante.model.Stats;
-import com.company.mutante.repository.MutantRepository;
+import com.company.mutants.entity.DNAEntity;
+import com.company.mutants.exception.MutantException;
+import com.company.mutants.exception.StatsException;
+import com.company.mutants.model.DNARequest;
+import com.company.mutants.model.Stats;
+import com.company.mutants.repository.MutantsRepository;
 import java.text.DecimalFormat;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -11,14 +13,14 @@ import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j
-public class MutantServiceImpl implements MutantService {
+public class MutantsServiceImpl implements MutantsService {
 
-  private final MutantRepository mutantRepository;
+  private final MutantsRepository mutantsRepository;
 
   private static final int ARRAY_LENGTH = 6;
 
-  public MutantServiceImpl(MutantRepository mutantRepository) {
-    this.mutantRepository = mutantRepository;
+  public MutantsServiceImpl(MutantsRepository mutantsRepository) {
+    this.mutantsRepository = mutantsRepository;
   }
 
   @Override
@@ -27,12 +29,17 @@ public class MutantServiceImpl implements MutantService {
     boolean isMutant = isMutantByHorizontalSequence(dnaRequest) || isMutantByVerticalSequence(dnaRequest) ||
         isMutantByAscDiagonalSequence(dnaRequest) || isMutantByDescDiagonalSequence(dnaRequest);
 
-    if (!mutantRepository.existsByDna(dnaRequest.getDna())) {
-      DNAEntity dnaEntity = DNAEntity.builder()
-          .dna(dnaRequest.getDna())
-          .isMutant(isMutant)
-          .build();
-      mutantRepository.save(dnaEntity);
+    try {
+      if (!mutantsRepository.existsByDna(dnaRequest.getDna())) {
+        DNAEntity dnaEntity = DNAEntity.builder()
+            .dna(dnaRequest.getDna())
+            .isMutant(isMutant)
+            .build();
+        mutantsRepository.save(dnaEntity);
+      }
+    } catch (Exception e) {
+      log.error("Error checking existence or saving a new entity in database. Error: {}", e.getMessage());
+      throw new MutantException("Error getting results or saving in repository");
     }
 
     return isMutant;
@@ -40,21 +47,30 @@ public class MutantServiceImpl implements MutantService {
 
   @Override
   public Stats getStats() {
-    List<DNAEntity> dnaEntityList = mutantRepository.findAll();
+    List<DNAEntity> dnaEntityList;
+
+    try {
+      dnaEntityList = mutantsRepository.findAll();
+    } catch (Exception e) {
+      log.error("Error getting database results. Error: {}", e.getMessage());
+      throw new StatsException("Unable to build stats due to repository error");
+    }
+
     int mutantCount = (int) dnaEntityList.stream().filter(DNAEntity::isMutant).count();
     int humanCount = dnaEntityList.size() - mutantCount;
-    double ratio = (double) mutantCount /humanCount;
-    DecimalFormat decimalFormat = new DecimalFormat("0.00");
+    String ratio = getRatioResult(mutantCount, humanCount);
+
     Stats stats = Stats.builder()
         .countMutantDna(mutantCount)
         .countHumanDna(humanCount)
-        .ratio(decimalFormat.format(ratio))
+        .ratio(ratio)
         .build();
+
     log.info("Returning stats: {}", stats);
     return stats;
   }
 
-  public boolean isMutantByHorizontalSequence(DNARequest dnaRequest) {
+  private boolean isMutantByHorizontalSequence(DNARequest dnaRequest) {
     for (int i = 0; i < dnaRequest.getDna().length; i++) {
       if (has4RepeatedCharacters(dnaRequest.getDna()[i])) {
         log.info("Horizontal repeated characters found {}", dnaRequest.getDna()[i]);
@@ -64,7 +80,7 @@ public class MutantServiceImpl implements MutantService {
     return false;
   }
 
-  public boolean isMutantByVerticalSequence(DNARequest dnaRequest) {
+  private boolean isMutantByVerticalSequence(DNARequest dnaRequest) {
     for (int i = 0; i < dnaRequest.getDna().length; i++) {
       StringBuilder stringBuilder = new StringBuilder();
       int rowLength = dnaRequest.getDna()[i].length();
@@ -79,16 +95,15 @@ public class MutantServiceImpl implements MutantService {
     return false;
   }
 
-  public boolean isMutantByDescDiagonalSequence(DNARequest dnaRequest) {
+  private boolean isMutantByDescDiagonalSequence(DNARequest dnaRequest) {
     for (int row = 0; row < ARRAY_LENGTH - 3; row++) {
       for (int col = ARRAY_LENGTH - 1; col > ARRAY_LENGTH - 3; col--) {
         StringBuilder stringBuilder = new StringBuilder();
         for (int i = 0; i < 4; i++) {
           stringBuilder.append(dnaRequest.getDna()[row + i].charAt(col - i));
         }
-        log.info("DescDiagonal row[{}] col[{}] string:{}", row, col, stringBuilder);
         if (has4RepeatedCharacters(stringBuilder.toString())) {
-          log.info("Repeated characters found in Descendant Diagonal {}", stringBuilder);
+          log.info("Descendant diagonal repeated characters found {}", stringBuilder);
           return true;
         }
       }
@@ -96,16 +111,15 @@ public class MutantServiceImpl implements MutantService {
     return false;
   }
 
-  public boolean isMutantByAscDiagonalSequence(DNARequest dnaRequest) {
+  private boolean isMutantByAscDiagonalSequence(DNARequest dnaRequest) {
     for (int row = 0; row < ARRAY_LENGTH - 3; row++) {
       for (int col = 0; col < ARRAY_LENGTH - 3; col++) {
         StringBuilder stringBuilder = new StringBuilder();
         for (int i = 0; i < 4; i++) {
           stringBuilder.append(dnaRequest.getDna()[row + i].charAt(col + i));
         }
-        log.info("AscDiagonal row[{}] col[{}] string:{}", row, col, stringBuilder);
         if (has4RepeatedCharacters(stringBuilder.toString())) {
-          log.info("Repeated characters found in Ascendant Diagonal {}", stringBuilder);
+          log.info("Ascendant diagonal repeated characters found {}", stringBuilder);
           return true;
         }
       }
@@ -123,5 +137,20 @@ public class MutantServiceImpl implements MutantService {
       }
     }
     return false;
+  }
+
+  private String getRatioResult(int mutantCount, int humanCount) {
+    DecimalFormat decimalFormat = new DecimalFormat("0.0");
+    double ratio;
+
+    if (mutantCount == 0 || humanCount == 0) {
+      ratio = 0;
+    } else if (mutantCount > humanCount) {
+      ratio = (double) humanCount / mutantCount;
+    } else {
+      ratio = (double) mutantCount / humanCount;
+    }
+
+    return decimalFormat.format(ratio);
   }
 }

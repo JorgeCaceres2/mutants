@@ -1,8 +1,7 @@
-package com.company.mutante.entity;
+package com.company.mutants.entity;
 
 
-import com.company.mutante.model.DNARequest;
-import com.company.mutante.validator.ValidDNA;
+import com.company.mutants.validator.ValidDNA;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -12,7 +11,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
 
 
 @Setter
@@ -28,7 +26,7 @@ public class DNAEntity {
   private Integer id;
 
   @ValidDNA
-  private String [] dna;
+  private String[] dna;
 
   private boolean isMutant;
 

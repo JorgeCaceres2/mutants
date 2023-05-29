@@ -1,4 +1,4 @@
-package com.company.mutante.validator;
+package com.company.mutants.validator;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
